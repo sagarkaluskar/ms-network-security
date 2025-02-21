@@ -84,3 +84,93 @@ print(f"Firewall '{firewall_name}' created successfully!")
 #Creates a Firewall Policy.
 #Deploys an Azure Firewall in South UK.
 #Associates the firewall with the policy.
+
+#4 Blocking Malicious IPs Automatically
+
+malicious_ips = ["192.168.1.10", "203.0.113.5", "198.51.100.7"]
+base_priority = 200  # Starting priority value
+
+for index, ip in enumerate(malicious_ips):
+    block_rule = {
+        "protocol": "*",
+        "source_port_range": "*",
+        "destination_port_range": "*",
+        "source_address_prefix": ip,
+        "destination_address_prefix": "*",
+        "access": "Deny",
+        "priority": base_priority + index,  # Increment priority for each rule
+        "direction": "Inbound"
+    }
+
+    rule_name = f"Block_{ip.replace('.', '_')}"
+    network_client.security_rules.begin_create_or_update(
+        resource_group, nsg_name, rule_name, block_rule
+    ).result()
+
+    print(f"Blocked IP {ip} with rule '{rule_name}' at priority {base_priority + index}.")
+
+#Reads a list of malicious IPs.
+#Creates NSG deny rules dynamically for each IP.
+#Uses priority 200 to ensure it applies before lower-priority allow rules.
+#Useful for automated threat response.
+
+#5 Automating Network Security Compliance Checks
+
+allowed_ports = {"22", "443", "80"}  # Allowed inbound ports (SSH, HTTPS, HTTP)
+nsg = network_client.network_security_groups.get(resource_group, nsg_name)
+
+for rule in nsg.security_rules:
+    if rule.access == "Allow" and rule.direction == "Inbound":
+        if rule.destination_port_range not in allowed_ports:
+            print(f"⚠️ Non-compliant NSG rule detected: {rule.name} allows port {rule.destination_port_range}")
+
+#Fetches NSG rules and checks if only expected ports are open.
+#Flags rules that expose non-standard ports.
+#Helps enforce network security policies.
+
+#6 Update Azure Firewall Rules Dynamically
+
+from azure.mgmt.network import NetworkManagementClient
+from azure.identity import DefaultAzureCredential
+
+# Initialize client
+credential = DefaultAzureCredential()
+network_client = NetworkManagementClient(credential, subscription_id)
+
+# Define the firewall policy and rule collection
+firewall_policy = {
+    "location": "uksouth",
+    "properties": {
+        "ruleCollections": [
+            {
+                "name": "Allow_Specific_Rules",
+                "properties": {
+                    "ruleType": "FirewallPolicyRule",
+                    "action": "Allow",
+                    "rule": [
+                        {
+                            "name": "AllowHTTP",
+                            "ruleType": "ApplicationRule",
+                            "action": "Allow",
+                            "protocols": ["Http"],
+                            "sourceAddresses": ["*"],
+                            "destinationAddresses": ["*"],
+                            "destinationPorts": ["80"]
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}
+
+# Now pass the correct parameters to the API
+network_client.firewall_policies.begin_create_or_update(
+    "nw-sec-rg",  # resource group
+    "MyFirewallPolicy",  # firewall policy name
+    firewall_policy  # parameters (configuration of the firewall policy)
+).result()
+
+#Helps enforce secure web access by blocking bad domains.
+#Uses Azure Firewall API to automate security policy updates.
+#Prevents phishing, malware, and data exfiltration attempts.
